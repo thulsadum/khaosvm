@@ -6,6 +6,14 @@ package net.inferum.khaos.vm;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+
+import net.inferum.khaos.vm.assembly.Data;
+import net.inferum.khaos.vm.assembly.PartialInstruction;
+import net.inferum.khaos.vm.assembly.Repeat;
+import net.inferum.khaos.vm.exception.BadAlignment;
+import net.inferum.khaos.vm.exception.UnresolvedLabel;
 
 /**
  * @author basty
@@ -17,51 +25,27 @@ public class AssemblyBuilder {
 	
 	public static final int FLAG_EXTENDED_INSTRUCTIONS = 1 << 0;
 
-	private int instructionOffset(long arg) {
-		if(!hasFlag(FLAG_EXTENDED_INSTRUCTIONS)) return 0;
-		if(arg < 0) return instructionOffset(-arg);
-		if((arg & 0xffL) == arg) return 3;
-		if((arg & 0xffffL) == arg) return 2;
-		if((arg & 0xffffffffL) == arg) return 1;
-		return 0;
-	}
-	
-	private void writeArgument(long arg) throws IOException {
-		if(!hasFlag(FLAG_EXTENDED_INSTRUCTIONS)){
-			dosBuffer.writeLong(arg);
-			return;
-		}
-		switch(instructionOffset(arg)) {
-		case 0: dosBuffer.writeLong(arg); break;
-		case 1: dosBuffer.writeInt((int) (arg & 0xffffffffL)); break;
-		case 2: dosBuffer.writeShort((short) (arg & 0xffffL)); break;
-		case 3: dosBuffer.writeByte((byte) (arg & 0xffL)); break;
-		}
-	}
-	
-	private void writeInstruction(Instruction instr, long arg) throws IOException {
-		if(!hasFlag(FLAG_EXTENDED_INSTRUCTIONS)) {
-			dosBuffer.writeLong(instr.getOpCode());
-		}else {
-			dosBuffer.writeByte(instr.getOpCode() + instructionOffset(arg));
-		}
-	}
-	
 	private long[] register;
-	private ByteArrayOutputStream buffer;
-	private DataOutputStream dosBuffer;
-	
 	private int flags;
+	private ArrayList<net.inferum.khaos.vm.assembly.Instruction> program;
+	private HashMap<String, Integer> labels;
+	private ArrayList<Integer> references;
+	
+	private int numberOfDataWords;
+	private int oldSize;
 	
 	public AssemblyBuilder() {
 		this(new long[KhaosVM.DEFAULT_REGISTERS]);
 	}
 	
 	public AssemblyBuilder(long[] register) {
-		buffer = new ByteArrayOutputStream();
-		dosBuffer = new DataOutputStream(buffer);
+		program = new ArrayList<>();
 		this.register = register;
-		flags = FLAG_EXTENDED_INSTRUCTIONS; 
+		flags = FLAG_EXTENDED_INSTRUCTIONS;
+		labels = new HashMap<>();
+		references = new ArrayList<>();
+		numberOfDataWords = 0;
+		oldSize = 0;
 	}
 	
 	public boolean hasFlag(int flag) {
@@ -89,9 +73,16 @@ public class AssemblyBuilder {
 		this.register = register;
 	}
 
-	public byte[] generate() throws IOException {
+	public byte[] generate() throws IOException  {
+		ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+		boolean align = hasFlag(FLAG_EXTENDED_INSTRUCTIONS);
+		for (net.inferum.khaos.vm.assembly.Instruction instruction : program) {
+			instruction.write(buffer, align);
+		}
+		
 		ByteArrayOutputStream out = new ByteArrayOutputStream(buffer.size() + 256);
 		DataOutputStream dos = new DataOutputStream(out);
+		
 		
 		dos.writeLong(MAGIC_NUMBER);
 		dos.writeInt(VERSION);
@@ -105,245 +96,473 @@ public class AssemblyBuilder {
 		
 		for(int i = 0; i < register.length; i++) {
 			dos.writeLong(register[i]);
-		}
+		}		
 		
-		dos.writeInt(buffer.size());
+		dos.writeInt(getCurrentOffset());
 		dos.write(buffer.toByteArray());
 		
 		return out.toByteArray();
 	}
-	
-	public AssemblyBuilder ldc(long value) throws IOException {
-		writeInstruction(Instruction.ldc , value);
-		writeArgument(value);
-		
-		return this;
-	}
-		
-	public AssemblyBuilder lda(long value) throws IOException {
-		writeInstruction(Instruction.lda, value);
-		writeArgument(value);
+
+	public AssemblyBuilder ldc(String value)  {
+		references.add(program.size());
+		program.add(new PartialInstruction(getCurrentOffset(), Instruction.ldc, true, 0, value));
 		
 		return this;
 	}
 	
-	public AssemblyBuilder ldaa(long value) throws IOException {
-		writeInstruction(Instruction.ldaa, value);
-		writeArgument(value);
-		
-		return this;
-	}
-	
-	public AssemblyBuilder ldh(long value) throws IOException {
-		writeInstruction(Instruction.ldh, value);
-		writeArgument(value);
-		
-		return this;
-	}
-	
-	public AssemblyBuilder ldl(long value) throws IOException {
-		writeInstruction(Instruction.ldl, value);
-		writeArgument(value);
-		
-		return this;
-	}
-	
-	public AssemblyBuilder ldla(long value) throws IOException {
-		writeInstruction(Instruction.ldla, value);
-		writeArgument(value);
-		
-		return this;
-	}
-	
-	public AssemblyBuilder ldr(long r) throws IOException {
-		writeInstruction(Instruction.ldr, Long.MAX_VALUE);
-		writeArgument(r & 0xff);
-		
-		return this;
-	}
-	
-	public AssemblyBuilder ldrr(long rDst, long rSrc) throws IOException {
-		writeInstruction(Instruction.ldrr, Long.MAX_VALUE);
-		writeArgument(rDst & 0xff);
-		writeArgument(rSrc & 0xff);
-		
-		return this;
-	}
-	
-	public AssemblyBuilder lds(long pos) throws IOException {
-		writeInstruction(Instruction.lds, pos);
-		writeArgument(pos);
-		
-		return this;
-	}
-	
-	public AssemblyBuilder ldsa(long pos) throws IOException {
-		writeInstruction(Instruction.ldsa, pos);
-		writeArgument(pos);
-		
-		return this;
-	}
-	
-	
-	public AssemblyBuilder sta(long pos) throws IOException {
-		writeInstruction(Instruction.sta, pos);
-		writeArgument(pos);
-		
-		return this;
-	}
-	
-	public AssemblyBuilder sth() throws IOException {
-		writeInstruction(Instruction.sth, Long.MAX_VALUE);
-		
-		return this;
-	}
-	
-	public AssemblyBuilder stl(long pos) throws IOException {
-		writeInstruction(Instruction.stl, pos);
-		writeArgument(pos);
-		
-		return this;
-	}
-	
-	public AssemblyBuilder str(long pos) throws IOException {
-		writeInstruction(Instruction.str, Long.MAX_VALUE);
-		writeArgument(pos & 0xff);
+	public AssemblyBuilder lda(String value)  {
+		references.add(program.size());
+		program.add(new PartialInstruction(getCurrentOffset(), Instruction.lda, true, 0, value));
 		
 		return this;
 	}
 
-	public AssemblyBuilder sts(long pos) throws IOException {
-		writeInstruction(Instruction.sts, pos);
-		writeArgument(pos);
-		
-		return this;
-	}
-	
-	public AssemblyBuilder trap(long pos) throws IOException {
-		writeInstruction(Instruction.trap, pos);
-		writeArgument(pos);
-		
-		return this;
-	}
-	
-	public AssemblyBuilder bra(long pos) throws IOException {
-		writeInstruction(Instruction.bra, pos);
-		writeArgument(pos);
-		
-		return this;
-	}
-	
-	public AssemblyBuilder bsr(long pos) throws IOException {
-		writeInstruction(Instruction.bsr, pos);
-		writeArgument(pos);
-		
-		return this;
-	}
-	
-	public AssemblyBuilder beq(long pos) throws IOException {
-		writeInstruction(Instruction.beq, pos);
-		writeArgument(pos);
-		
-		return this;
-	}
-	
-	public AssemblyBuilder bne(long pos) throws IOException {
-		writeInstruction(Instruction.bne, pos);
-		writeArgument(pos);
-		
-		return this;
-	}
-	
-	public AssemblyBuilder bge(long pos) throws IOException {
-		writeInstruction(Instruction.bge, pos);
-		writeArgument(pos);
+	public AssemblyBuilder ldaa(String value)  {
+		references.add(program.size());
+		program.add(new PartialInstruction(getCurrentOffset(), Instruction.ldaa, true, 0, value));
 		
 		return this;
 	}
 
-	public AssemblyBuilder bgt(long pos) throws IOException {
-		writeInstruction(Instruction.bgt, pos);
-		writeArgument(pos);
-		
-		return this;
-	}
-
-	public AssemblyBuilder ble(long pos) throws IOException {
-		writeInstruction(Instruction.ble, pos);
-		writeArgument(pos);
-		
-		return this;
-	}
-
-	public AssemblyBuilder blt(long pos) throws IOException {
-		writeInstruction(Instruction.blt, pos);
-		writeArgument(pos);
+	public AssemblyBuilder ldh(String value)  {
+		references.add(program.size());
+		program.add(new PartialInstruction(getCurrentOffset(), Instruction.ldh, true, 0, value));
 		
 		return this;
 	}
 	
-	public AssemblyBuilder add() throws IOException {
-		writeInstruction(Instruction.add, Long.MAX_VALUE);
-		return this;
-	}
-	
-	public AssemblyBuilder sub() throws IOException {
-		writeInstruction(Instruction.sub, Long.MAX_VALUE);
-		return this;
-	}
-	
-	public AssemblyBuilder mul() throws IOException {
-		writeInstruction(Instruction.mul, Long.MAX_VALUE);
-		return this;
-	}
-	
-	public AssemblyBuilder div() throws IOException {
-		writeInstruction(Instruction.div, Long.MAX_VALUE);
-		return this;
-	}
-	
-	public AssemblyBuilder mod() throws IOException {
-		writeInstruction(Instruction.mod, Long.MAX_VALUE);
-		return this;
-	}
-	
-	public AssemblyBuilder and() throws IOException {
-		writeInstruction(Instruction.and, Long.MAX_VALUE);
-		return this;
-	}
-	
-	public AssemblyBuilder or() throws IOException {
-		writeInstruction(Instruction.or, Long.MAX_VALUE);
-		return this;
-	}
-	
-	public AssemblyBuilder xor() throws IOException {
-		writeInstruction(Instruction.xor, Long.MAX_VALUE);
-		return this;
-	}
-	
-	public AssemblyBuilder neg() throws IOException {
-		writeInstruction(Instruction.neg, Long.MAX_VALUE);
-		return this;
-	}
-	
-	public AssemblyBuilder not() throws IOException {
-		writeInstruction(Instruction.not, Long.MAX_VALUE);
-		return this;
-	}
-	
-	public AssemblyBuilder halt() throws IOException {
-		writeInstruction(Instruction.halt, Long.MAX_VALUE);
-		return this;
-	}
-	
-	public AssemblyBuilder noop() throws IOException {
-		writeInstruction(Instruction.noop, Long.MAX_VALUE);
+	public AssemblyBuilder ldl(String value)  {
+		references.add(program.size());
+		program.add(new PartialInstruction(getCurrentOffset(), Instruction.ldl, true, 0, value));
+		
 		return this;
 	}
 
-	public AssemblyBuilder cmp() throws IOException {
-		writeInstruction(Instruction.cmp, Long.MAX_VALUE);
+	public AssemblyBuilder ldla(String value)  {
+		references.add(program.size());
+		program.add(new PartialInstruction(getCurrentOffset(), Instruction.ldla, true, 0, value));
+		
 		return this;
+	}
+
+	public AssemblyBuilder lds(String value)  {
+		references.add(program.size());
+		program.add(new PartialInstruction(getCurrentOffset(), Instruction.lds, true, 0, value));
+		
+		return this;
+	}
+
+	public AssemblyBuilder ldsa(String value)  {
+		references.add(program.size());
+		program.add(new PartialInstruction(getCurrentOffset(), Instruction.ldsa, true, 0, value));
+		
+		return this;
+	}
+
+	public AssemblyBuilder sta(String value)  {
+		references.add(program.size());
+		program.add(new PartialInstruction(getCurrentOffset(), Instruction.sta, true, 0, value));
+		
+		return this;
+	}
+
+	public AssemblyBuilder sts(String value)  {
+		references.add(program.size());
+		program.add(new PartialInstruction(getCurrentOffset(), Instruction.sts, true, 0, value));
+		
+		return this;
+	}
+
+	public AssemblyBuilder stl(String value)  {
+		references.add(program.size());
+		program.add(new PartialInstruction(getCurrentOffset(), Instruction.stl, true, 0, value));
+		
+		return this;
+	}
+
+	public AssemblyBuilder bra(String value)  {
+		references.add(program.size());
+		program.add(new PartialInstruction(getCurrentOffset(), Instruction.bra, true, 0, value));
+		
+		return this;
+	}
+
+	public AssemblyBuilder bsr(String value)  {
+		references.add(program.size());
+		program.add(new PartialInstruction(getCurrentOffset(), Instruction.bsr, true, 0, value));
+		
+		return this;
+	}
+
+	public AssemblyBuilder beq(String value)  {
+		references.add(program.size());
+		program.add(new PartialInstruction(getCurrentOffset(), Instruction.beq, true, 0, value));
+		
+		return this;
+	}
+
+	public AssemblyBuilder bne(String value)  {
+		references.add(program.size());
+		program.add(new PartialInstruction(getCurrentOffset(), Instruction.bne, true, 0, value));
+		
+		return this;
+	}
+
+	public AssemblyBuilder bge(String value)  {
+		references.add(program.size());
+		program.add(new PartialInstruction(getCurrentOffset(), Instruction.bge, true, 0, value));
+		
+		return this;
+	}
+
+	public AssemblyBuilder bgt(String value)  {
+		references.add(program.size());
+		program.add(new PartialInstruction(getCurrentOffset(), Instruction.bgt, true, 0, value));
+		
+		return this;
+	}
+
+	public AssemblyBuilder ble(String value)  {
+		references.add(program.size());
+		program.add(new PartialInstruction(getCurrentOffset(), Instruction.ble, true, 0, value));
+		
+		return this;
+	}
+
+	public AssemblyBuilder blt(String value)  {
+		references.add(program.size());
+		program.add(new PartialInstruction(getCurrentOffset(), Instruction.blt, true, 0, value));
+		
+		return this;
+	}
+
+	public AssemblyBuilder ldc(long value)  {
+		program.add(new net.inferum.khaos.vm.assembly.Instruction(Instruction.ldc, value));
+		
+		return this;
+	}
+		
+	public AssemblyBuilder lda(long value)  {
+		program.add(new net.inferum.khaos.vm.assembly.Instruction(Instruction.lda, value));
+		
+		return this;
+	}
+	
+	public AssemblyBuilder ldaa(long value)  {
+		program.add(new net.inferum.khaos.vm.assembly.Instruction(Instruction.ldaa, value));
+		
+		return this;
+	}
+	
+	public AssemblyBuilder ldh(long value)  {
+		program.add(new net.inferum.khaos.vm.assembly.Instruction(Instruction.ldh, value));
+		
+		return this;
+	}
+	
+	public AssemblyBuilder ldl(long value)  {
+		program.add(new net.inferum.khaos.vm.assembly.Instruction(Instruction.ldl, value));
+		
+		return this;
+	}
+	
+	public AssemblyBuilder ldla(long value)  {
+		program.add(new net.inferum.khaos.vm.assembly.Instruction(Instruction.ldla, value));
+		
+		return this;
+	}
+	
+	public AssemblyBuilder ldr(long r)  {
+		program.add(new net.inferum.khaos.vm.assembly.Instruction(Instruction.ldr, false, 1, r));
+		
+		return this;
+	}
+	
+	public AssemblyBuilder ldr(String r)  {
+		return ldr(KhaosVM.REGISTER_RESOLVE.get(r));
+	}
+
+	public AssemblyBuilder ldrr(long rDst, long rSrc)  {
+		program.add(new net.inferum.khaos.vm.assembly.Instruction(Instruction.ldrr, false, 1, rDst, rSrc));
+		
+		return this;
+	}
+
+	public AssemblyBuilder ldrr(String rDst, String rSrc)  {
+		return ldrr(KhaosVM.REGISTER_RESOLVE.get(rDst), KhaosVM.REGISTER_RESOLVE.get(rSrc));
+	}
+	
+	public AssemblyBuilder lds(long pos)  {
+		program.add(new net.inferum.khaos.vm.assembly.Instruction(Instruction.lds, pos));
+		
+		return this;
+	}
+	
+	public AssemblyBuilder ldsa(long pos)  {
+		program.add(new net.inferum.khaos.vm.assembly.Instruction(Instruction.ldsa, pos));
+		
+		return this;
+	}
+	
+	
+	public AssemblyBuilder sta(long pos)  {
+		program.add(new net.inferum.khaos.vm.assembly.Instruction(Instruction.sta, pos));
+		
+		return this;
+	}
+	
+	public AssemblyBuilder sth()  {
+		program.add(new net.inferum.khaos.vm.assembly.Instruction(Instruction.sth, null));
+		
+		return this;
+	}
+	
+	public AssemblyBuilder stl(long pos)  {
+		program.add(new net.inferum.khaos.vm.assembly.Instruction(Instruction.stl, pos));
+		
+		return this;
+	}
+	
+	public AssemblyBuilder str(long pos)  {
+		program.add(new net.inferum.khaos.vm.assembly.Instruction(Instruction.str,false, 1, pos));
+		
+		return this;
+	}
+
+	public AssemblyBuilder str(String register)  {
+		return str(KhaosVM.REGISTER_RESOLVE.get(register));
+	}
+
+	public AssemblyBuilder sts(long pos)  {
+		program.add(new net.inferum.khaos.vm.assembly.Instruction(Instruction.sts, pos));
+		
+		return this;
+	}
+	
+	public AssemblyBuilder trap(long pos)  {
+		program.add(new net.inferum.khaos.vm.assembly.Instruction(Instruction.trap, pos));
+		
+		return this;
+	}
+	
+	public AssemblyBuilder bra(long pos)  {
+		program.add(new net.inferum.khaos.vm.assembly.Instruction(Instruction.bra, pos));
+		
+		return this;
+	}
+	
+	public AssemblyBuilder bsr(long pos)  {
+		program.add(new net.inferum.khaos.vm.assembly.Instruction(Instruction.bsr, pos));
+		
+		return this;
+	}
+	
+	public AssemblyBuilder jsr()  {
+		program.add(new net.inferum.khaos.vm.assembly.Instruction(Instruction.jsr));
+		
+		return this;
+	}
+	
+	public AssemblyBuilder beq(long pos)  {
+		program.add(new net.inferum.khaos.vm.assembly.Instruction(Instruction.beq, pos));
+		
+		return this;
+	}
+	
+	public AssemblyBuilder bne(long pos)  {
+		program.add(new net.inferum.khaos.vm.assembly.Instruction(Instruction.bne, pos));
+		
+		return this;
+	}
+	
+	public AssemblyBuilder bge(long pos)  {
+		program.add(new net.inferum.khaos.vm.assembly.Instruction(Instruction.bge, pos));
+		
+		return this;
+	}
+
+	public AssemblyBuilder bgt(long pos)  {
+		program.add(new net.inferum.khaos.vm.assembly.Instruction(Instruction.bgt, pos));
+		
+		return this;
+	}
+
+	public AssemblyBuilder ble(long pos)  {
+		program.add(new net.inferum.khaos.vm.assembly.Instruction(Instruction.ble, pos));
+		
+		return this;
+	}
+
+	public AssemblyBuilder blt(long pos)  {
+		program.add(new net.inferum.khaos.vm.assembly.Instruction(Instruction.blt, pos));
+		
+		return this;
+	}
+	
+	public AssemblyBuilder add()  {
+		program.add(new net.inferum.khaos.vm.assembly.Instruction(Instruction.add, null));
+		return this;
+	}
+	
+	public AssemblyBuilder sub()  {
+		program.add(new net.inferum.khaos.vm.assembly.Instruction(Instruction.sub, null));
+		return this;
+	}
+	
+	public AssemblyBuilder mul()  {
+		program.add(new net.inferum.khaos.vm.assembly.Instruction(Instruction.mul, null));
+		return this;
+	}
+	
+	public AssemblyBuilder div()  {
+		program.add(new net.inferum.khaos.vm.assembly.Instruction(Instruction.div, null));
+		return this;
+	}
+	
+	public AssemblyBuilder mod()  {
+		program.add(new net.inferum.khaos.vm.assembly.Instruction(Instruction.mod, null));
+		return this;
+	}
+	
+	public AssemblyBuilder and()  {
+		program.add(new net.inferum.khaos.vm.assembly.Instruction(Instruction.and, null));
+		return this;
+	}
+	
+	public AssemblyBuilder or()  {
+		program.add(new net.inferum.khaos.vm.assembly.Instruction(Instruction.or, null));
+		return this;
+	}
+	
+	public AssemblyBuilder xor()  {
+		program.add(new net.inferum.khaos.vm.assembly.Instruction(Instruction.xor, null));
+		return this;
+	}
+	
+	public AssemblyBuilder neg()  {
+		program.add(new net.inferum.khaos.vm.assembly.Instruction(Instruction.neg, null));
+		return this;
+	}
+	
+	public AssemblyBuilder not()  {
+		program.add(new net.inferum.khaos.vm.assembly.Instruction(Instruction.not, null));
+		return this;
+	}
+	
+	public AssemblyBuilder halt()  {
+		program.add(new net.inferum.khaos.vm.assembly.Instruction(Instruction.halt, null));
+		return this;
+	}
+	
+	public AssemblyBuilder noop()  {
+		program.add(new net.inferum.khaos.vm.assembly.Instruction(Instruction.noop, null));
+		return this;
+	}
+
+	public AssemblyBuilder cmp()  {
+		program.add(new net.inferum.khaos.vm.assembly.Instruction(Instruction.cmp, null));
+		return this;
+	}
+	
+	public AssemblyBuilder data(byte... data) {
+		long[] d = new long[data.length];
+		for(int i = 0; i < data.length; i++)
+			d[i] = data[i];
+		this.data(1, d);
+		return this;
+	}
+	
+	public AssemblyBuilder data(short... data) {
+		long[] d = new long[data.length];
+		for(int i = 0; i < data.length; i++)
+			d[i] = data[i];
+		this.data(2, d);
+		return this;
+	}
+	
+	public AssemblyBuilder data(int... data) {
+		long[] d = new long[data.length];
+		for(int i = 0; i < data.length; i++)
+			d[i] = data[i];
+		this.data(4, d);
+		return this;
+	}
+
+	
+	public AssemblyBuilder data(long... data) {
+		long[] d = new long[data.length];
+		for(int i = 0; i < data.length; i++)
+			d[i] = data[i];
+		this.data(8, d);
+		return this;
+	}
+	
+	public AssemblyBuilder data(String data) {
+		byte[] bs = data.getBytes();
+		long[] d = new long[bs.length];
+		for(int i = 0; i < bs.length; i++)
+			d[i] = bs[i];
+		this.data(1, d);
+		return this;
+	}
+	
+	public AssemblyBuilder data(int width, long[] data) {
+		program.add(new Data(width, data));
+		return this;
+	}
+
+	public AssemblyBuilder label(String label) {
+		labels.put(label, getCurrentOffset());
+		return this;
+	}
+	
+
+	/**
+	 * @return the numberOfDataWords
+	 */
+	public int getCurrentOffset() {
+		if(oldSize == program.size()) return numberOfDataWords;
+		int count = 0;
+		for (net.inferum.khaos.vm.assembly.Instruction instruction : program) {
+			count += instruction.getWords();
+		}
+		oldSize = program.size();
+		numberOfDataWords = count;
+		return numberOfDataWords;
+	}
+	
+	public AssemblyBuilder link() throws UnresolvedLabel {
+		for (Integer i : references) {
+			program.set(i, ((PartialInstruction) program.get(i)).resolve(this));
+		}
+		references.clear();
+		return this;
+	}
+	
+	public AssemblyBuilder repeat(int amount, byte data) {
+		program.add(new Repeat(amount, data));
+		return this;
+	}
+	
+	public AssemblyBuilder offset(int newOffset) throws BadAlignment {
+		int diff = newOffset - getCurrentOffset();
+		if(diff < 0) throw new BadAlignment(getCurrentOffset(), newOffset);
+		return repeat(diff, (byte) 0);
+	}
+	
+	/**
+	 * @return the labels
+	 */
+	public HashMap<String, Integer> getLabels() {
+		return labels;
+	}
+	
+	public void clear() {
+		labels.clear();
+		references.clear();
+		program.clear();
+		numberOfDataWords = 0;
+		oldSize = 0;
 	}
 }

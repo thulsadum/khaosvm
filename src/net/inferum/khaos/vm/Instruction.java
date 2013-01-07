@@ -15,6 +15,7 @@ public enum Instruction {
 	trap16(0xf2, 1),
 	trap32(0xf1, 1),
 	trap(0xf0, 1),
+	rdata(0xfd, 2),
 	sdata(0xfe, 1),
 	mdata(0xff, 2),
 	// arithmetic
@@ -63,7 +64,7 @@ public enum Instruction {
 	bsr32(0x7d, 1),
 	bsr16(0x7e, 1),
 	bsr8(0x7f, 1),
-	jrs(0x87),
+	jsr(0x87),
 	// push
 	ldc(0x10,1),
 	ldc32(0x11,1),

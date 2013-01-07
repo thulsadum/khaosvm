@@ -95,9 +95,23 @@ public class KhaosVM implements Comparable<KhaosVM> {
 	 */
 	public static final long STATUS_TRAPPED = 1 << 1;
 
-	private static final long TRAP_READ = 0x00;
-	private static final long TRAP_WRITE = 0x01;
-	private static final long TRAP_REG_TRAP = 0x80;
+	public static final long TRAP_READ = 0x00;
+	public static final long TRAP_WRITE = 0x01;
+	public static final long TRAP_REG_TRAP = 0x80;
+	
+	public static final HashMap<String, Integer> REGISTER_RESOLVE;
+	
+	static {
+		REGISTER_RESOLVE = new HashMap<>();
+		REGISTER_RESOLVE.put("PC", PCI);
+		REGISTER_RESOLVE.put("SP", SPI);
+		REGISTER_RESOLVE.put("MP", MPI);
+		REGISTER_RESOLVE.put("HP", HPI);
+		REGISTER_RESOLVE.put("RR", RRI);
+		REGISTER_RESOLVE.put("R0", FIXED_REGISTERS + 0);
+		REGISTER_RESOLVE.put("R1", FIXED_REGISTERS + 1);
+		REGISTER_RESOLVE.put("R2", FIXED_REGISTERS + 2);
+	}
 	
 	private long[] memory; // memory
 	private long[] register; // number of aux registers
@@ -107,6 +121,7 @@ public class KhaosVM implements Comparable<KhaosVM> {
 	private PrintStream output, error, debug;
 
 	private HashMap<Long, Stack<TrapHandler>> traps;
+	private boolean trace;
 
 	private TrapHandler thDefaults = new TrapHandler() {
 		@Override
@@ -330,7 +345,7 @@ public class KhaosVM implements Comparable<KhaosVM> {
 		int sp = (int) getSP();
 		int mp = (int) getMP();
 		int hp = (int) getHP();
-		int ra = (int) getRR();
+		int rr = (int) getRR();
 		
 		long trap = -1;
 		
@@ -339,6 +354,8 @@ public class KhaosVM implements Comparable<KhaosVM> {
 		
 		Instruction instruction = Instruction.valueOf(op);
 		if(instruction == null) throw new BadOpCode(op);
+		
+		if(trace) debug.println(String.format("Instruction: %s, PC: %d (0x%x), SP: %d (0x%x), MP: %d (0x%x), HP: %d (0x%x)", instruction.name(), pc, memory[pc], sp, memory[sp], mp, memory[mp], hp, memory[hp]));
 		
 		switch (instruction) {
 		case add:
@@ -394,6 +411,11 @@ public class KhaosVM implements Comparable<KhaosVM> {
 		case bra:
 			pc = (int) (pc + memory[pc] + 1);
 			break;
+		case jsr:
+			int t = pc;
+			pc = (int) (pc + memory[sp] + 1);
+			memory[sp] = t + 2;
+			break;
 		case bsr:
 			memory[++sp] = pc + 2;
 			pc = (int) (pc + memory[pc] + 1);
@@ -404,8 +426,6 @@ public class KhaosVM implements Comparable<KhaosVM> {
 			break;
 		case halt:
 			setFlag(STATUS_HALT, true);
-			break;
-		case jrs:
 			break;
 		case lda:
 			memory[sp] = memory[(int) (memory[sp] + memory[pc++])];
@@ -445,7 +465,7 @@ public class KhaosVM implements Comparable<KhaosVM> {
 				mp = (int) getMP();
 				break;
 			case 3:
-				ra = (int) getRR();
+				rr = (int) getRR();
 				break;
 			case 4:
 				hp = (int) getHP();
@@ -507,7 +527,7 @@ public class KhaosVM implements Comparable<KhaosVM> {
 				mp = (int) getMP();
 				break;
 			case 3:
-				ra = (int) getRR();
+				rr = (int) getRR();
 				break;
 			case 4:
 				hp = (int) getHP();
@@ -539,7 +559,7 @@ public class KhaosVM implements Comparable<KhaosVM> {
 		setPC(pc);
 		setHP(hp);
 		setMP(mp);
-		setRR(ra);
+		setRR(rr);
 		setSP(sp);
 		
 		if(hasFlag(STATUS_TRAPPED)) {
@@ -550,6 +570,7 @@ public class KhaosVM implements Comparable<KhaosVM> {
 			if(handler != null) {
 				handler.trap(trap, this);
 			}
+			setFlag(STATUS_TRAPPED, false);
 		}		
 	}
 
@@ -686,5 +707,22 @@ public class KhaosVM implements Comparable<KhaosVM> {
 	public void setDebug(PrintStream debug) {
 		this.debug = debug;
 	}
+
+	public boolean isHalted() {
+		return hasFlag(STATUS_HALT);
+	}
 	
+	/**
+	 * @return the trace
+	 */
+	public boolean isTrace() {
+		return trace;
+	}
+	
+	/**
+	 * @param trace the trace to set
+	 */
+	public void setTrace(boolean trace) {
+		this.trace = trace;
+	}
 }

@@ -984,6 +984,30 @@ public class InstructionsTest {
 	}
 
 	@Test
+	public void testJsr() {
+		KhaosVM vm = setup(A(Instruction.ldc.getOpCode(), 0x10, Instruction.jsr.getOpCode()));
+		assertEquals(vm.getPC(), 0);
+		assertEquals(vm.getSP(), 3);
+		assertEquals(vm.getMP(), 3);
+		assertEquals(vm.getRR(), 0);
+		assertEquals(vm.getHP(), memorySize - 1);
+		assertEquals(vm.getMemory()[(int) vm.getSP()], 0);
+
+		try {
+			vm.executeStep();
+			vm.executeStep();
+		} catch (KVMException e) {
+			fail(e.getMessage());
+		}
+		
+		assertEquals(vm.getPC(), 0x14);
+		assertEquals(vm.getSP(), 4);
+		assertEquals(vm.getMP(), 3);
+		assertEquals(vm.getRR(), 0);
+		assertEquals(vm.getMemory()[(int) vm.getSP()], 5);
+	}
+
+	@Test
 	public void testBeqTrue() {
 		KhaosVM vm = setup(A(Instruction.ldc.getOpCode(), 0, Instruction.beq.getOpCode(), 0x10));
 		assertEquals(vm.getPC(), 0);
@@ -1472,5 +1496,51 @@ public class InstructionsTest {
 		assertEquals(vm.getMP(), 10);
 		assertEquals(vm.getRR(), 0);
 		assertEquals(b.toByteArray()[0], '!');
+	}
+
+	@Test
+	public void testNoop() {
+		KhaosVM vm = setup(A(Instruction.noop.getOpCode()));
+		assertEquals(vm.getPC(), 0);
+		assertEquals(vm.getSP(), 1);
+		assertEquals(vm.getMP(), 1);
+		assertEquals(vm.getRR(), 0);
+		assertEquals(vm.getHP(), memorySize - 1);
+		assertEquals(vm.getMemory()[4], 0);
+		try {
+			vm.executeStep();
+		} catch (KVMException e) {
+			fail(e.getMessage());
+		}
+		assertEquals(vm.getPC(), 1);
+		assertEquals(vm.getSP(), 1);
+		assertEquals(vm.getMP(), 1);
+		assertEquals(vm.getRR(), 0);
+		assertEquals(vm.getHP(), memorySize - 1);
+	}
+
+	@Test
+	public void testHalt() {
+		KhaosVM vm = setup(A(Instruction.halt.getOpCode()));
+		assertEquals(vm.getPC(), 0);
+		assertEquals(vm.getSP(), 1);
+		assertEquals(vm.getMP(), 1);
+		assertEquals(vm.getRR(), 0);
+		assertEquals(vm.getHP(), memorySize - 1);
+		assertEquals(vm.getMemory()[4], 0);
+		assertEquals(vm.isHalted(), false);
+		assertEquals(vm.hasFlag(KhaosVM.STATUS_HALT), false);
+		try {
+			vm.executeStep();
+		} catch (KVMException e) {
+			fail(e.getMessage());
+		}
+		assertEquals(vm.getPC(), 1);
+		assertEquals(vm.getSP(), 1);
+		assertEquals(vm.getMP(), 1);
+		assertEquals(vm.getRR(), 0);
+		assertEquals(vm.getHP(), memorySize - 1);
+		assertEquals(vm.isHalted(), true);
+		assertEquals(vm.hasFlag(KhaosVM.STATUS_HALT), true);
 	}
 }

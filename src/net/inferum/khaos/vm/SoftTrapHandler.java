@@ -55,5 +55,4 @@ public class SoftTrapHandler implements TrapHandler {
 		/* the called function must return */
 		kvm.setPC(location);
 	}
-
 }

@@ -99,7 +99,7 @@ public class AssemblyLoader {
 			case cmp:
 			case div:
 			case halt:
-			case jrs:
+			case jsr:
 			case mod:
 			case mul:
 			case neg:
@@ -383,6 +383,12 @@ public class AssemblyLoader {
 				code[pos++] = pinstr;
 				code[pos++] = dis.readByte() & 0xff;
 				code[pos++] = dis.readByte() & 0xff;
+				break;
+			case rdata:
+				dcount = dis.readInt();
+				byte data = dis.readByte();
+				for(int i = 0; i < dcount; i++)
+					code[pos++] = data;
 				break;
 			case mdata:
 				dcount = dis.readByte() & 0xff;
