@@ -65,6 +65,7 @@ public enum Instruction {
 	bsr16(0x7e, 1),
 	bsr8(0x7f, 1),
 	jsr(0x87),
+	ret(0x88),
 	// push
 	ldc(0x10,1),
 	ldc32(0x11,1),

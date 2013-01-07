@@ -1,7 +1,7 @@
 /**
  * 
  */
-package net.inferum.khaos.vm.test;
+package net.inferum.khaos.test;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.fail;

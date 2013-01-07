@@ -413,12 +413,15 @@ public class KhaosVM implements Comparable<KhaosVM> {
 			break;
 		case jsr:
 			int t = pc;
-			pc = (int) (pc + memory[sp] + 1);
+			pc = (int) (memory[sp]);
 			memory[sp] = t + 2;
 			break;
 		case bsr:
 			memory[++sp] = pc + 2;
 			pc = (int) (pc + memory[pc] + 1);
+			break;
+		case ret:
+			pc = (int) memory[sp--];
 			break;
 		case div:
 			memory[sp-1] = memory[sp-1] / memory[sp];

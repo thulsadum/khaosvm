@@ -1,7 +1,7 @@
 /**
  * 
  */
-package net.inferum.khaos.vm.test;
+package net.inferum.khaos.test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
@@ -984,6 +984,28 @@ public class InstructionsTest {
 	}
 
 	@Test
+	public void testRet() {
+		KhaosVM vm = setup(A(Instruction.ldc.getOpCode(), 0x10, Instruction.ret.getOpCode()));
+		assertEquals(vm.getPC(), 0);
+		assertEquals(vm.getSP(), 3);
+		assertEquals(vm.getMP(), 3);
+		assertEquals(vm.getRR(), 0);
+		assertEquals(vm.getHP(), memorySize - 1);
+
+		try {
+			vm.executeStep();
+			vm.executeStep();
+		} catch (KVMException e) {
+			fail(e.getMessage());
+		}
+		
+		assertEquals(vm.getPC(), 0x10);
+		assertEquals(vm.getSP(), 3);
+		assertEquals(vm.getMP(), 3);
+		assertEquals(vm.getRR(), 0);
+	}
+
+	@Test
 	public void testJsr() {
 		KhaosVM vm = setup(A(Instruction.ldc.getOpCode(), 0x10, Instruction.jsr.getOpCode()));
 		assertEquals(vm.getPC(), 0);
@@ -1000,7 +1022,7 @@ public class InstructionsTest {
 			fail(e.getMessage());
 		}
 		
-		assertEquals(vm.getPC(), 0x14);
+		assertEquals(vm.getPC(), 0x10);
 		assertEquals(vm.getSP(), 4);
 		assertEquals(vm.getMP(), 3);
 		assertEquals(vm.getRR(), 0);
