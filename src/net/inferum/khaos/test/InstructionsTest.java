@@ -39,7 +39,7 @@ public class InstructionsTest {
 	
 	private static KhaosVM setup(long[] code, long[] registers) {
 		
-		KhaosVM ret = new KhaosVM(memorySize);
+		KhaosVM ret = new KhaosVM(new long[memorySize]);
 		
 		System.arraycopy(code, 0, ret.getMemory(), 0, code.length);
 		if(registers!=null)

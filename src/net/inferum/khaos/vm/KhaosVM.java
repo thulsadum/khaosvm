@@ -170,16 +170,16 @@ public class KhaosVM implements Comparable<KhaosVM> {
 	};
 	
 	public KhaosVM() {
-		this(DEFAULT_MEMORY, DEFAULT_REGISTERS);
+		this(new long[DEFAULT_MEMORY], DEFAULT_REGISTERS);
 	}
 
-	public KhaosVM(int memorySize) {
+	public KhaosVM(long[] memorySize) {
 		this(memorySize, DEFAULT_REGISTERS);
 	}
 
 	
-	public KhaosVM(int mem, int regs) {
-		memory = new long[mem];
+	public KhaosVM(long[] mem, int regs) {
+		memory = mem;
 		register = new long[regs < FIXED_REGISTERS ? FIXED_REGISTERS : regs];
 		status = 0;
 		traps = new HashMap<>();

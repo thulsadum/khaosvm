@@ -48,12 +48,20 @@ public class PartialInstruction extends Instruction {
 	
 	public Instruction resolve(AssemblyBuilder ab) throws UnresolvedLabel {
 		Integer address;
+		String label;
+		boolean absolute;
 		for (Entry<String, Integer> e : references.entrySet()) {
-			address = ab.getLabels().get(e.getKey());
+			label = e.getKey();
+			absolute = false;
+			if(label.charAt(0) == '@'){
+				label = label.substring(1);
+				absolute = true;
+			}
+			address = ab.getLabels().get(label);
 			
-			if(address == null) throw new UnresolvedLabel(e.getKey());
+			if(address == null) throw new UnresolvedLabel(label);
 			
-			getArguments()[e.getValue()] = address.intValue() - (offset + getArguments().length + 1); 
+			getArguments()[e.getValue()] = address.intValue() - (absolute?0:(offset + getArguments().length + 1)); 
 		}
 		return new Instruction(this);
 	}

@@ -8,6 +8,7 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Map.Entry;
 
 import net.inferum.khaos.vm.assembly.Data;
 import net.inferum.khaos.vm.assembly.PartialInstruction;
@@ -465,6 +466,11 @@ public class AssemblyBuilder {
 		return this;
 	}
 	
+	public AssemblyBuilder ret()  {
+		program.add(new net.inferum.khaos.vm.assembly.Instruction(Instruction.ret, null));
+		return this;
+	}
+	
 	public AssemblyBuilder data(byte... data) {
 		long[] d = new long[data.length];
 		for(int i = 0; i < data.length; i++)
@@ -549,6 +555,17 @@ public class AssemblyBuilder {
 		int diff = newOffset - getCurrentOffset();
 		if(diff < 0) throw new BadAlignment(getCurrentOffset(), newOffset);
 		return repeat(diff, (byte) 0);
+	}
+
+	public AssemblyBuilder append(AssemblyBuilder other) {
+		for (Entry<String, Integer> e : other.labels.entrySet()) {
+			labels.put(e.getKey(), getCurrentOffset() + e.getValue());
+		}
+		for(Integer ref :other.references) {
+			this.references.add(ref.intValue() + program.size());
+		}
+		program.addAll(other.program);
+		return this;
 	}
 	
 	/**

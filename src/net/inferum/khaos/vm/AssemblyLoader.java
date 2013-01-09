@@ -68,7 +68,6 @@ public class AssemblyLoader {
 
 	public long[] load(int additionalMemory) throws IOException, AssemblyException {
 		long[] code;
-		/* TODO add unit tests for this */
 		DataInputStream dis = new DataInputStream(stream);
 		
 		int version, length, noRegister;
@@ -109,6 +108,7 @@ public class AssemblyLoader {
 			case sub:
 			case xor:
 			case sth:
+			case ret:
 				code[pos++] = pinstr;
 				break;
 			case beq:
