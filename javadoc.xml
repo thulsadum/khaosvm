@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<project default="javadoc">
+    <target name="javadoc">
+        <javadoc access="public" author="true" classpath="/usr/local/lib/eclipse/4.2/eclipse/plugins/org.junit_4.10.0.v4_10_0_v20120426-0900/junit.jar:/usr/local/lib/eclipse/4.2/eclipse/plugins/org.hamcrest.core_1.1.0.v20090501071000.jar" destdir="doc" doctitle="KhaosVM - a simple stack machine" nodeprecated="false" nodeprecatedlist="false" noindex="false" nonavbar="false" notree="false" packagenames="net.inferum.khaos.asm,net.inferum.khaos.vm.assembly,net.inferum.khaos.test,net.inferum.khaos.vm,net.inferum.khaos.vm.exception" source="1.7" sourcepath="src" splitindex="true" use="true" version="true"/>
+    </target>
+</project>
